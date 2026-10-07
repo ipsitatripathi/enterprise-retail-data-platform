@@ -766,6 +766,5 @@ These capabilities will be marked as implemented only after they are actually de
 | Version | Date           | Change                                      |
 | ------- | -------------- | ------------------------------------------- |
 | 1.0     | September 2026 | Initial transformation design documentation |
-| 1.1     | October 7 2026 | Implemented regional and daily regional Gold 
-                             transformations,Gold validation,Silver-to-Gold 
+| 1.1     | October 7 2026 | Implemented regional and daily regional Gold transformations,Gold validation,Silver-to-Gold 
                              reconciliation, and ADLS Delta persistence  |
