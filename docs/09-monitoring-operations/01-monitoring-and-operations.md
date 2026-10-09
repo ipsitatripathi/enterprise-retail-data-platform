@@ -1,789 +1,324 @@
-
 # Monitoring and Operations
+
+**Document ID:** MON-001
+**Project:** Enterprise Retail Data Platform
+**Version:** 1.1
+**Status:** Basic execution monitoring available; automated monitoring enhancements planned
+**Last Updated:** October 2026
+
+---
 
 ## 1. Purpose
 
-This document defines the monitoring, operational visibility, alerting, failure handling, and support strategy for the Enterprise Retail Data Platform.
+This document defines the monitoring and operational approach for the Enterprise Retail Data Platform built using Azure Data Factory, Azure Databricks, and Azure Data Lake Storage Gen2 (ADLS Gen2).
 
-The objective is to make pipeline execution observable and support reliable operation of the platform as it evolves from a development implementation into a production-oriented data platform.
+It describes the current execution monitoring capabilities, operational validation procedures, failure investigation process, and planned enhancements for automated monitoring and alerting.
 
-The monitoring architecture will cover:
+The document distinguishes currently available capabilities from planned production-oriented improvements.
 
-* Pipeline execution
-* Data processing metrics
-* Data Quality metrics
-* Reconciliation
-* Failures
-* Performance
-* Incremental processing
-* Operational metadata
-* Alerts
-* Troubleshooting
-* Recovery
+## 2. Monitoring Objectives
 
----
+The monitoring strategy aims to:
 
-## 2. Current Status
+* Track Azure Data Factory pipeline execution.
+* Track Databricks job and task execution.
+* Identify failed activities and tasks.
+* Verify successful completion of Bronze, Silver, and Gold processing.
+* Validate persisted Gold datasets after pipeline execution.
+* Detect data-quality and reconciliation failures.
+* Support investigation and recovery of failed runs.
+* Introduce automated notifications and operational dashboards in future iterations.
 
-| Capability                      | Status      |
-| ------------------------------- | ----------- |
-| Pipeline execution              | Implemented |
-| Data Quality validation         | Implemented |
-| Record reconciliation           | Implemented |
-| Basic validation output         | Implemented |
-| Structured operational metadata | Planned     |
-| Pipeline monitoring dashboard   | Planned     |
-| Automated alerts                | Planned     |
-| Failure notification            | Planned     |
-| DQ monitoring                   | Planned     |
-| Performance monitoring          | Planned     |
-| Incremental monitoring          | Planned     |
-| Centralized operational logging | Planned     |
-| Automated recovery              | Planned     |
+## 3. Monitoring Architecture
 
-The current project contains validation and reconciliation logic, but production-grade centralized monitoring and alerting have not yet been implemented.
-
----
-
-## 3. Monitoring Objectives
-
-The monitoring framework should answer the following operational questions:
-
-1. Did the pipeline run?
-2. Did the pipeline succeed or fail?
-3. How long did it take?
-4. How many records were processed?
-5. How many records were rejected?
-6. Did source and target record counts reconcile?
-7. Did Data Quality rules pass?
-8. Did processing volume change unexpectedly?
-9. Did performance degrade?
-10. Which pipeline stage failed?
-11. Can the failed processing interval be safely reprocessed?
-
----
-
-## 4. Monitoring Architecture
-
-The target architecture is:
+The current monitoring approach uses the execution details provided by Azure Data Factory and Azure Databricks.
 
 ```text
-Source
-  |
-  v
-Raw
-  |
-  v
-Bronze
-  |
-  v
-Data Quality
-  |
-  +------> Quarantine
-  |
-  v
-Silver
-  |
-  v
-Gold
-  |
-  v
-Operational Metadata
-  |
-  +------> Monitoring
-  |
-  +------> Alerts
-  |
-  +------> Dashboards
-```
-
-Operational metadata will provide the foundation for centralized monitoring.
-
----
-
-## 5. Monitoring Layers
-
-Monitoring will be divided into several categories:
-
-```text
-Pipeline Monitoring
-       |
-       +-- Execution
-       +-- Failures
-       +-- Duration
-
-Data Monitoring
-       |
-       +-- Record Counts
-       +-- Reconciliation
-       +-- DQ Metrics
-       +-- Volume Changes
-
-Performance Monitoring
-       |
-       +-- Runtime
-       +-- Processing Volume
-       +-- Compute
-       +-- Shuffle / Bottlenecks
-
-Security Monitoring
-       |
-       +-- Access
-       +-- Permission Changes
-       +-- Authentication
-```
-
----
-
-## 6. Pipeline Execution Monitoring
-
-Each pipeline execution should produce operational metadata.
-
-Target metadata includes:
-
-| Field            | Description                                  |
-| ---------------- | -------------------------------------------- |
-| Run ID           | Unique identifier for the pipeline execution |
-| Pipeline name    | Name of the pipeline                         |
-| Source           | Source system or dataset                     |
-| Start time       | Pipeline start timestamp                     |
-| End time         | Pipeline completion timestamp                |
-| Duration         | Total execution duration                     |
-| Status           | Success / Failure / Partial                  |
-| Error message    | Failure information                          |
-| Records read     | Source records processed                     |
-| Records written  | Target records produced                      |
-| Records rejected | Quarantined records                          |
-| Environment      | Dev / Test / Production                      |
-
----
-
-## 7. Run Status
-
-The target monitoring model will use standardized execution states:
-
-```text
-STARTED
-   |
-   v
-RUNNING
-   |
-   +------> SUCCESS
-   |
-   +------> FAILED
-   |
-   +------> PARTIAL
-```
-
-A failed pipeline should not be reported as successful simply because some downstream records were created.
-
----
-
-## 8. Processing Metrics
-
-Each processing stage should capture useful metrics.
-
-Example:
-
-| Metric                    | Example |
-| ------------------------- | ------: |
-| Source records            | 100,000 |
-| Bronze records            | 100,000 |
-| Valid records             |  99,055 |
-| Quarantined records       |     945 |
-| Silver records            |  99,055 |
-| Reconciliation difference |       0 |
-
-The actual values will vary between pipeline runs.
-
----
-
-## 9. Reconciliation Monitoring
-
-Reconciliation is a key operational control.
-
-For the current pipeline:
-
-```text
-Total Input Records
-        =
-Silver Records
-+
-Quarantine Records
-```
-
-The current implementation demonstrated:
-
-```text
-100,000
-=
-99,055
-+
-945
-```
-
-with a reconciliation difference of:
-
-```text
-0
-```
-
-Future monitoring will automatically evaluate reconciliation results and flag unexpected differences.
-
----
-
-## 10. Data Quality Monitoring
-
-Data Quality metrics should be monitored independently from pipeline execution status.
-
-A pipeline can technically complete while producing an unexpectedly high number of invalid records.
-
-Therefore, monitoring should track:
-
-* Null values
-* Invalid quantities
-* Invalid payment methods
-* Invalid order statuses
-* Invalid dates
-* Duplicate business keys
-* Invalid categories
-* Invalid regions
-* Invalid products
-* Invalid prices
-
-Example:
-
-```text
-DQ Rule
-   |
-   +-- Passed
-   +-- Failed
-   +-- Failure Percentage
-```
-
----
-
-## 11. Quarantine Monitoring
-
-Quarantine volume should be monitored over time.
-
-Important metrics include:
-
-* Total quarantined records
-* Quarantine percentage
-* Records by DQ rule
-* Records by source
-* Records by processing run
-* Records awaiting remediation
-
-A sudden increase in quarantine volume may indicate:
-
-* Source-system changes
-* Schema changes
-* Invalid source data
-* Broken transformation logic
-* Business-rule changes
-
-Monitoring should report the metric without automatically assuming the root cause.
-
----
-
-## 12. Volume Monitoring
-
-Source and target record volumes should be monitored to identify unexpected changes.
-
-Example:
-
-```text
-Previous Run      98,500 records
-Current Run      100,000 records
-```
-
-The monitoring framework can compare current volumes with historical processing patterns.
-
-Future implementations may introduce configurable thresholds such as:
-
-```text
-Expected volume range
+Azure Data Factory
         |
         v
-Actual volume
+PL_Retail_Full_Load_V1
         |
         v
-Within threshold?
-     /       \
-   Yes        No
-    |          |
-Continue      Alert
+Databricks Job
+        |
+        +---------------------+
+        |          |          |
+        v          v          v
+      Bronze     Silver      Gold
+        |          |          |
+        +----------+----------+
+                   |
+                   v
+         Execution and Data Checks
+                   |
+          +--------+--------+
+          |                 |
+          v                 v
+    ADF Monitoring    Databricks Run Details
 ```
 
-Thresholds should be configurable rather than hard-coded.
+Azure Data Factory provides pipeline-level execution information. Databricks provides job-level and task-level execution details.
 
----
+Data-quality and reconciliation checks provide additional evidence about the correctness of the processed datasets.
 
-## 13. Performance Monitoring
+## 4. Current Monitoring Capabilities
 
-Pipeline performance should be monitored using metrics such as:
+### 4.1 Azure Data Factory Monitoring
 
-* Total execution time
-* Stage execution time
-* Records processed
-* Data scanned
-* Shuffle volume
-* Number of tasks
-* Task duration
-* Compute utilization
-* Failed tasks
-* Retry count
+The pipeline `PL_Retail_Full_Load_V1` can be monitored through the Azure Data Factory Monitor interface.
 
-Performance monitoring will help identify bottlenecks as dataset size increases.
+The operator can inspect:
 
----
+* Pipeline run status.
+* Run start and end information.
+* Activity execution status.
+* Failed activity details.
+* Error messages returned by failed activities.
+* The Databricks Job activity result.
 
-## 14. Spark Performance Monitoring
+The current full-load pipeline has completed successfully during validation.
 
-For Databricks workloads, Spark execution information can be used to investigate:
+### 4.2 Databricks Job Monitoring
 
-* Long-running stages
-* Excessive shuffles
-* Data skew
-* Task imbalance
-* Large scans
-* Expensive joins
-* Repeated recomputation
-* Resource constraints
+The Databricks job `JOB_Retail_Full_Load_V1` provides job-run and task-run details.
 
-The monitoring process should use Spark execution details when investigating performance incidents.
+The operator can inspect:
 
----
+* Overall job status.
+* Individual task status.
+* Task execution order and dependencies.
+* Notebook execution output.
+* Error details for failed tasks.
+* Execution history available in the workspace.
 
-## 15. Incremental Processing Monitoring
+The current job contains three sequential tasks:
 
-When incremental processing is implemented, monitoring will include:
+1. `Bronze_Ingestion`
+2. `Silver_Transformation`
+3. `Gold_Aggregation`
 
-* Previous watermark
-* Current watermark
-* Records detected
-* Records processed
-* Records skipped
-* Records inserted
-* Records updated
-* Records rejected
-* Processing interval
-* Run status
+All three tasks have completed successfully during the validated ADF full-load execution.
 
-Example:
+### 4.3 Data Storage Validation
 
-```text
-Previous Watermark
-        |
-        v
-Incremental Boundary
-        |
-        v
-Records Detected
-        |
-        v
-Processing
-        |
-        v
-New Watermark
-```
+The Gold datasets can be read back from ADLS Gen2 to verify that processing results were persisted and remain readable.
 
-The watermark should not advance when the required processing fails.
+Validated datasets:
 
----
+| Dataset              | Storage path suffix | Expected rows |
+| -------------------- | ------------------- | ------------: |
+| Regional Orders      | `regional_orders`   |             5 |
+| Daily Regional Sales | `regional_sales`    |           150 |
 
-## 16. Alerting Strategy
+The current implementation has successfully read both persisted datasets after pipeline execution.
 
-The target platform will support automated alerts for significant operational conditions.
+These checks validate the current test dataset and configuration. They are not a substitute for continuous production monitoring.
 
-Potential alert categories include:
-
-### Critical
+## 5. Data Quality Monitoring
 
-* Pipeline failure
-* Data loss/reconciliation failure
-* Unauthorized production access
-* Critical infrastructure failure
+The platform performs data-quality checks during transformation and validation.
 
-### Warning
+Current checks include:
 
-* High quarantine percentage
-* Unexpected volume change
-* Performance degradation
-* DQ failure increase
-* Processing delay
+* Null customer ID validation.
+* Quantity validation.
+* Payment method validation.
+* Order status validation.
+* Duplicate order ID detection.
+* Record-count reconciliation.
+* Quarantine record reconciliation.
+* Gold business-grain duplicate detection.
+* Silver-to-Gold order and unit reconciliation.
+* Financial metric reconciliation.
 
-### Informational
+Current Silver reconciliation:
 
-* Successful pipeline completion
-* Normal processing statistics
-* Scheduled maintenance
+| Metric             |   Count |
+| ------------------ | ------: |
+| Input records      | 100,000 |
+| Silver records     |  99,055 |
+| Quarantine records |     945 |
+| Reconciled total   | 100,000 |
 
-Alert severity should be configurable according to organizational requirements.
+The reconciliation rule is:
 
----
+`Input records = Silver records + Quarantine records`
 
-## 17. Alert Examples
+For the current dataset:
 
-Example conditions:
+`100,000 = 99,055 + 945`
 
-```text
-Pipeline Status = FAILED
-        |
-        v
-Critical Alert
-```
+The Gold validation also checks the intended business grains:
 
-```text
-Quarantine Percentage > Threshold
-        |
-        v
-Warning Alert
-```
+* Regional Orders: one row per region.
+* Daily Regional Sales: one row per `order_day + region`.
 
-```text
-Reconciliation Difference != 0
-        |
-        v
-Critical Alert
-```
+These checks have passed for the current implementation.
 
-```text
-Runtime > Expected Threshold
-        |
-        v
-Performance Alert
-```
+## 6. Operational Execution Procedure
 
----
+The standard full-load monitoring procedure is:
 
-## 18. Alert Routing
+1. Open Azure Data Factory.
+2. Navigate to Monitor.
+3. Locate the run for `PL_Retail_Full_Load_V1`.
+4. Inspect the pipeline execution status.
+5. Open the Databricks Job activity details.
+6. Open the corresponding Databricks job run.
+7. Verify that Bronze, Silver, and Gold succeeded in order.
+8. Inspect task outputs where relevant.
+9. Verify data-quality and reconciliation results.
+10. Read the persisted Gold datasets and confirm the expected row counts.
+11. Record failures or unexpected results for investigation.
 
-The final alerting mechanism will depend on the organization's operational tooling.
+A successful pipeline status should be accompanied by appropriate data-level validation.
 
-Potential destinations include:
+## 7. Failure Investigation
 
-* Email
-* Microsoft Teams
-* Incident-management systems
-* Azure monitoring services
-* Databricks monitoring mechanisms
+When a pipeline or task fails, the operator should:
 
-The implementation should avoid sending excessive alerts for conditions that do not require action.
+1. Identify the first failed activity or task.
+2. Open its execution output.
+3. Capture the complete error message and available run identifiers.
+4. Determine whether the issue relates to authentication, permissions, compute configuration, source data, transformation logic, or storage access.
+5. Review the relevant notebook output and logs.
+6. Correct the underlying cause.
+7. Rerun the affected workload when appropriate.
+8. Validate the resulting data before declaring recovery complete.
 
----
+Failures should not be marked as resolved solely because a subsequent execution succeeds. The underlying cause should be understood where practical.
 
-## 19. Failure Handling
+## 8. Retry and Recovery Considerations
 
-When a pipeline fails, the operational process should be:
+The current operational approach supports manual inspection and investigation of failed runs.
 
-```text
-Pipeline Failure
-      |
-      v
-Capture Error
-      |
-      v
-Identify Failed Stage
-      |
-      v
-Determine Impact
-      |
-      v
-Correct Issue
-      |
-      v
-Reprocess
-      |
-      v
-Validate Results
-```
+Before rerunning a failed workload, consider whether any earlier tasks wrote data successfully.
 
-The failure should remain visible in operational metadata even after successful recovery.
+The operator should verify that rerunning the affected notebook will not create duplicate records, corrupt existing datasets, or produce inconsistent aggregates.
 
----
+The current full-load implementation uses its existing write strategies and has been validated for the current execution path. Generalized restart-safe incremental processing and automated recovery are planned enhancements.
 
-## 20. Retry Strategy
+## 9. Alerting and Notifications
 
-Retries should be used carefully.
+Automated alerting and notification workflows are not yet implemented.
 
-Transient failures may be retried automatically.
+Potential future capabilities include:
 
-Examples may include:
+* Pipeline failure notifications.
+* Databricks task failure alerts.
+* Data-quality failure notifications.
+* Reconciliation failure alerts.
+* Long-running pipeline alerts.
+* Notifications for missing or delayed data.
+* Operational summaries for scheduled executions.
 
-* Temporary infrastructure failure
-* Temporary connectivity issue
-* Service interruption
+These capabilities may be implemented using supported Azure monitoring and notification services.
 
-Data-quality failures should generally not be blindly retried because retrying the same invalid data without correction will produce the same result.
+They will be marked as implemented only after configuration and end-to-end validation.
 
----
+## 10. Metrics and Operational Indicators
 
-## 21. Recovery and Reprocessing
+The following indicators are relevant to the platform.
 
-The platform should support controlled reprocessing.
+| Indicator                        | Purpose                                    | Current status                           |
+| -------------------------------- | ------------------------------------------ | ---------------------------------------- |
+| Pipeline success or failure      | Track full-load execution                  | Available through ADF Monitor            |
+| Databricks job status            | Track job execution                        | Available through Databricks             |
+| Individual task status           | Identify the failed processing layer       | Available through Databricks             |
+| Input record count               | Track source volume                        | Checked during validation                |
+| Silver record count              | Track accepted records                     | Checked during validation                |
+| Quarantine record count          | Track rejected records                     | Checked during validation                |
+| Gold row count                   | Verify aggregate output size               | Checked during validation                |
+| Duplicate business-grain records | Detect incorrect aggregation grain         | Checked during validation                |
+| Silver-to-Gold reconciliation    | Verify aggregate correctness               | Checked during validation                |
+| Pipeline duration trends         | Identify execution degradation             | Requires ongoing collection and analysis |
+| Automated failure alerts         | Notify operators without manual inspection | Planned                                  |
+| Automated freshness alerts       | Detect delayed data                        | Planned                                  |
 
-Recovery may involve:
+The presence of an indicator in this table does not imply that a continuous dashboard or automated alert exists.
 
-1. Identifying the failed run.
-2. Identifying the affected processing interval.
-3. Verifying source/raw data availability.
-4. Correcting the underlying issue.
-5. Reprocessing the affected data.
-6. Running Data Quality validation.
-7. Performing reconciliation.
-8. Confirming successful completion.
+## 11. Logging and Auditability
 
-The Raw layer provides a foundation for replay and recovery.
+ADF and Databricks provide execution details that can be used during troubleshooting.
 
----
+The current approach relies on the execution history and output available through those services.
 
-## 22. Operational Runbook
+Future improvements may introduce centralized logging, structured operational records, retention policies, and correlation identifiers across pipeline and task runs.
 
-A future production runbook should contain procedures for:
+Sensitive credentials and confidential information must not be copied into operational documentation or committed to GitHub.
 
-### Pipeline Failure
+## 12. Performance Monitoring
 
-* Check run status
-* Inspect error details
-* Identify failed stage
-* Determine whether failure is transient
-* Retry or correct the issue
-* Validate output
+The current implementation has validated functional correctness and successful end-to-end execution.
 
-### Data Quality Spike
+Formal performance baselines and continuous performance monitoring have not yet been established.
 
-* Review failed DQ rules
-* Compare against previous runs
-* Inspect source changes
-* Determine whether the issue is source-data related or transformation related
-* Quarantine invalid records
-* Reprocess corrected records where applicable
+Future performance monitoring should consider:
 
-### Reconciliation Failure
+* Pipeline duration.
+* Task duration.
+* Input data volume.
+* Output data volume.
+* Compute utilization where available.
+* Storage read and write behavior.
+* Shuffle and skew indicators.
+* Execution failures and retries.
+* Changes in data-processing volume over time.
 
-* Stop downstream promotion if required
-* Compare source and target counts
-* Identify missing or duplicate records
-* Review pipeline logs
-* Reprocess affected data
-* Validate reconciliation
+Performance thresholds should be established from measured results rather than arbitrary assumptions.
 
-### Performance Degradation
+## 13. Security and Operational Access
 
-* Review execution duration
-* Inspect Spark stages
-* Check shuffle behavior
-* Investigate skew
-* Review input volume
-* Compare against historical runs
+Monitoring access should follow least-privilege principles.
 
----
+Operators should have only the permissions required to inspect pipeline runs, Databricks job executions, and relevant logs.
 
-## 23. Monitoring Dashboard
+Access to source data, quarantine records, and business data should follow the platform's security and governance requirements.
 
-A future monitoring dashboard should provide a high-level operational view.
+Access tokens, storage keys, passwords, and other secrets must not appear in logs, screenshots shared publicly, or source-controlled documentation.
 
-Example:
+## 14. Current Implementation Status
 
-```text
-=================================================
-          RETAIL DATA PLATFORM
-             OPERATIONS DASHBOARD
-=================================================
+| Capability                               | Status                 |
+| ---------------------------------------- | ---------------------- |
+| ADF pipeline run monitoring              | Available              |
+| Databricks job-run monitoring            | Available              |
+| Databricks task-level monitoring         | Available              |
+| Notebook output inspection               | Available              |
+| Manual failure investigation             | Available              |
+| Silver data-quality checks               | Implemented            |
+| Quarantine reconciliation                | Implemented            |
+| Gold row-count validation                | Implemented            |
+| Gold business-grain validation           | Implemented            |
+| Silver-to-Gold reconciliation            | Implemented            |
+| Post-execution Gold read-back validation | Implemented and tested |
+| Centralized operational dashboard        | Planned                |
+| Automated pipeline failure notifications | Planned                |
+| Automated data-quality alerts            | Planned                |
+| Automated freshness monitoring           | Planned                |
+| Automated recovery workflow              | Planned                |
+| Formal performance baselines             | Planned                |
+| Advanced operational metrics             | Planned                |
 
-Pipeline Status       : SUCCESS
-Last Run              : <timestamp>
-Execution Duration    : <duration>
+## 15. Future Enhancements
 
-Records Read          : <count>
-Records Processed     : <count>
-Records Quarantined   : <count>
+Planned improvements include:
 
-DQ Failure Rate       : <percentage>
-Reconciliation        : PASS
+* Automated pipeline and task failure notifications.
+* Centralized logging and monitoring.
+* Automated data-quality alerting.
+* Data freshness monitoring.
+* Execution-duration baselines and threshold alerts.
+* Automated recovery and retry strategies.
+* Operational dashboards.
+* Run-level audit records and correlation.
+* Monitoring integration with incremental processing.
+* Documented service-level objectives for future production workloads.
 
-Incremental Watermark : <value>
+## 16. Change History
 
-Active Alerts         : <count>
-=================================================
-```
-
-The dashboard implementation is planned.
-
----
-
-## 24. Operational KPIs
-
-Future operational KPIs may include:
-
-| KPI                     | Purpose                    |
-| ----------------------- | -------------------------- |
-| Pipeline Success Rate   | Reliability                |
-| Average Runtime         | Performance                |
-| Failure Count           | Operational stability      |
-| DQ Failure Rate         | Data quality               |
-| Quarantine Rate         | Source/data quality health |
-| Reconciliation Failures | Data completeness          |
-| Records Processed       | Processing volume          |
-| Processing Delay        | Data availability          |
-| Retry Count             | Stability                  |
-| Recovery Time           | Operational response       |
-
-KPIs should be evaluated against documented thresholds and historical behavior rather than isolated values.
-
----
-
-## 25. Logging
-
-The target platform should maintain structured logs containing:
-
-* Run ID
-* Pipeline name
-* Processing stage
-* Timestamp
-* Status
-* Record counts
-* DQ results
-* Error details
-* Processing duration
-
-Logs should contain enough information to troubleshoot failures without exposing secrets or unnecessarily sensitive data.
-
----
-
-## 26. Observability Layers
-
-The platform's observability model can be summarized as:
-
-```text
-                 OBSERVABILITY
-                      |
-        +-------------+-------------+
-        |             |             |
-     Pipeline       Data        Performance
-     Monitoring   Monitoring     Monitoring
-        |             |             |
-        v             v             v
-      Runs           DQ          Spark Metrics
-      Errors       Counts        Runtime
-      Duration     Rejection     Shuffle
-        |
-        +-----------------------------+
-                                      |
-                                      v
-                                  Alerting
-                                      |
-                                      v
-                                  Operations
-```
-
----
-
-## 27. Security and Monitoring
-
-Monitoring must follow the security principles defined in the Security and Governance document.
-
-Monitoring systems should not expose:
-
-* Credentials
-* Access tokens
-* Passwords
-* Secrets
-* Unnecessary customer information
-
-Access to operational metadata and logs should be controlled.
-
----
-
-## 28. Testing Strategy
-
-Monitoring functionality will require dedicated testing.
-
-### Pipeline Monitoring
-
-* Successful run recorded
-* Failed run recorded
-* Runtime captured
-* Error captured
-
-### Data Quality Monitoring
-
-* DQ failures captured
-* Quarantine volume captured
-* DQ threshold alert generated
-
-### Reconciliation Monitoring
-
-* Matching counts produce PASS
-* Count mismatch produces alert
-
-### Alerting
-
-* Critical alert generated
-* Warning alert generated
-* Duplicate alert suppression where required
-
-### Recovery
-
-* Failed run can be identified
-* Failed interval can be reprocessed
-* Successful recovery is recorded
-
----
-
-## 29. Current Implementation vs Target State
-
-| Capability             | Current State | Target State         |
-| ---------------------- | ------------- | -------------------- |
-| Pipeline execution     | Implemented   | Monitored            |
-| DQ validation          | Implemented   | Monitored            |
-| Reconciliation         | Implemented   | Automated monitoring |
-| Quarantine             | Implemented   | Monitored            |
-| Operational metadata   | Planned       | Implemented          |
-| Centralized logging    | Planned       | Implemented          |
-| Dashboard              | Planned       | Implemented          |
-| Automated alerts       | Planned       | Implemented          |
-| Performance monitoring | Planned       | Implemented          |
-| Incremental monitoring | Planned       | Implemented          |
-| Runbook                | Planned       | Implemented          |
-| Automated recovery     | Planned       | Implemented          |
-
----
-
-## 30. Future Enhancements
-
-Planned operational enhancements include:
-
-* Create operational metadata tables
-* Capture pipeline run statistics
-* Implement centralized monitoring
-* Implement automated alerting
-* Build monitoring dashboard
-* Add DQ trend monitoring
-* Add volume anomaly detection
-* Add performance monitoring
-* Add incremental watermark monitoring
-* Create production runbooks
-* Implement controlled retry/recovery
-* Integrate monitoring with incident management
-
----
-
-## 31. Status
-
-**Design Status:** Implemented
-
-**Production Monitoring Implementation:** Planned
-
-The platform currently contains Data Quality and reconciliation validation capabilities. Centralized monitoring, dashboards, alerting, operational metadata, and automated recovery remain future implementation areas.
-
----
-
-## 32. Change History
-
-| Date       | Change                                           |
-| ---------- | ------------------------------------------------ |
-| 2026-10-01 | Initial monitoring and operations design created |
+| Version | Date           | Change                                                                                                                                          |
+| ------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1.0     | September 2026 | Initial monitoring and operations documentation                                                                                                 |
+| 1.1     | October 2026   | Documented ADF and Databricks execution monitoring, successful full-load validation, Gold read-back checks, and planned monitoring enhancements |
