@@ -1,249 +1,163 @@
 # Enterprise Retail Data Platform
 
-An enterprise-style retail data engineering project built using Azure Data Factory, Azure Databricks, Azure Data Lake Storage Gen2, and Delta Lake. The platform implements a Medallion Architecture with data quality controls, quarantine processing, business-oriented Gold datasets, and orchestrated full-load processing.
+An enterprise-style data engineering project built using Azure Data Lake Storage Gen2, Azure Databricks, Apache Spark, Delta Lake, and Azure Data Factory.
 
-## Project Overview
+The project demonstrates a layered data platform for ingesting retail order data, applying data quality controls, transforming business data, and producing analytics-ready Gold datasets.
 
-Retail organizations need reliable data pipelines that consolidate transactional data, validate data quality, standardize business attributes, and produce trusted datasets for analytics.
+## Project Objectives
 
-This project demonstrates the implementation of a layered data platform that processes retail order data from ingestion through business-level aggregation.
-
-The current implementation includes Bronze ingestion, Silver transformation, data-quality validation, quarantine handling, Gold aggregations, and Azure Data Factory orchestration using Databricks serverless compute.
-
-## Architecture
-
-```text
-Retail Source Data
-       |
-       v
-Raw Layer - ADLS Gen2
-       |
-       v
-Bronze Layer - ADLS Gen2
-       |
-       v
-Silver Layer - ADLS Gen2
-       |
-       +--------------------+
-       |                    |
-       v                    v
- Validated Records      Quarantine Layer
-       |
-       v
-Gold Layer - ADLS Gen2
-       |
-       +-------------------------+
-       |                         |
-       v                         v
-Regional Orders          Daily Regional Sales
-```
-
-Azure Data Factory orchestrates the Databricks job that executes the Bronze, Silver, and Gold notebook tasks in sequence.
+* Implement a Bronze–Silver–Gold data architecture.
+* Preserve source data and isolate invalid records.
+* Apply data quality checks and reconciliation controls.
+* Build daily regional sales and order aggregates.
+* Orchestrate the full-load pipeline using Azure Data Factory and Azure Databricks Jobs.
+* Demonstrate incremental processing with timestamp-based change selection, Delta MERGE, watermark tracking, audit records, idempotency, and downstream reconciliation.
+* Maintain architecture, data design, testing, operations, security, and deployment documentation.
 
 ## Technology Stack
 
-| Technology                   | Purpose                                     |
-| ---------------------------- | ------------------------------------------- |
-| Azure Data Factory           | Pipeline orchestration                      |
-| Azure Databricks             | Distributed data processing                 |
-| Databricks Serverless        | Notebook task execution                     |
-| Azure Data Lake Storage Gen2 | Layered data storage                        |
-| Delta Lake                   | Structured data storage and reliable writes |
-| PySpark                      | Data transformation and aggregation         |
-| GitHub                       | Source control and project documentation    |
+| Technology                   | Purpose                                    |
+| ---------------------------- | ------------------------------------------ |
+| Azure Data Lake Storage Gen2 | Data lake storage                          |
+| Azure Databricks             | Distributed data processing                |
+| Apache Spark / PySpark       | Data transformation and validation         |
+| Delta Lake                   | Transactional storage and MERGE operations |
+| Azure Data Factory           | Full-load pipeline orchestration           |
+| Unity Catalog                | Data access and governance integration     |
+| GitHub                       | Source control and project documentation   |
 
-## Medallion Architecture
+## Architecture Overview
 
-### Raw Layer
+```text
+Retail Order Source
+        |
+        v
+   Raw Data Layer
+        |
+        v
+ Bronze - Source Ingestion
+        |
+        v
+ Silver - Cleansing and Validation
+        |
+        +------> Quarantine - Invalid Records
+        |
+        v
+ Gold - Business Aggregations
+        |
+        v
+ Analytics-Ready Datasets
+```
 
-The Raw layer preserves landed source data for subsequent processing and traceability.
-
-### Bronze Layer
-
-The Bronze layer ingests source records into the data platform.
-
-### Silver Layer
-
-The Silver layer standardizes and validates retail order data. Invalid records are routed to the Quarantine layer.
-
-### Quarantine Layer
-
-The Quarantine layer stores records rejected by the implemented validation rules for investigation and potential remediation.
-
-### Gold Layer
-
-The Gold layer provides business-oriented datasets designed for downstream reporting and analysis.
-
-#### Gold Data Product 1: Regional Orders
-
-Provides regional order-status metrics and completed-order sales measures.
-
-Current metrics include:
-
-* Total orders.
-* Completed orders.
-* Pending orders.
-* Cancelled orders.
-* Returned orders.
-* Total units.
-* Gross sales.
-* Total discount.
-* Total tax.
-* Total shipping cost.
-* Net sales.
-* Average order value.
-
-Order-status metrics cover all statuses. Sales measures are calculated from completed orders.
-
-#### Gold Data Product 2: Daily Regional Sales
-
-Provides daily sales metrics by region at the `order_day + region` grain.
-
-Current metrics include:
-
-* Total completed orders.
-* Total units.
-* Gross sales.
-* Total discount.
-* Total tax.
-* Total shipping cost.
-* Net sales.
-* Average order value.
+The full-load pipeline is orchestrated through Azure Data Factory and an Azure Databricks Job. Incremental processing has been validated separately using isolated test paths and is not yet integrated into the production-style orchestration flow.
 
 ## Data Quality and Reconciliation
 
-The implementation includes validation rules for customer identifiers, quantities, payment methods, order statuses, duplicate order IDs, and reconciliation between processing layers.
+The baseline dataset contains 100,000 source records.
 
-Current validation results:
+| Metric                        | Observed Value |
+| ----------------------------- | -------------: |
+| Raw records                   |        100,000 |
+| Silver records                |         99,055 |
+| Quarantined records           |            945 |
+| Silver plus quarantine        |        100,000 |
+| Duplicate order IDs in Silver |              0 |
 
-| Metric                            |  Result |
-| --------------------------------- | ------: |
-| Input records                     | 100,000 |
-| Silver records                    |  99,055 |
-| Quarantine records                |     945 |
-| Invalid quantities in Silver      |       0 |
-| Null customer IDs in Silver       |       0 |
-| Invalid payment methods in Silver |       0 |
-| Invalid order statuses in Silver  |       0 |
-| Duplicate order IDs in Silver     |       0 |
+The baseline reconciliation is:
 
-Record reconciliation:
+`Silver records + Quarantine records = Raw input records`
 
-`100,000 = 99,055 + 945`
+The implementation includes checks for required fields, quantities, order statuses, duplicates, and business-rule consistency.
 
-The current Gold implementation has also been validated against Silver for completed-order counts, units, and financial totals.
+## Gold Data Products
 
-## Orchestration
+The project includes daily regional sales aggregation and regional order-status reporting.
 
-The full-load orchestration is implemented using Azure Data Factory and an Azure Databricks job.
+Financial calculations follow these rules:
 
-**ADF pipeline:** `PL_Retail_Full_Load_V1`
+* `gross_sales = quantity × unit_price`
+* `net_sales = gross_sales − discount_amount + tax_amount + shipping_cost`
+* Only `COMPLETED` orders contribute to completed-order financial metrics.
 
-**Databricks job:** `JOB_Retail_Full_Load_V1`
+Gold datasets are validated against Silver to verify record counts, units, financial totals, and aggregation-key uniqueness.
 
-The job executes three dependent notebook tasks:
+## Incremental Processing — Controlled Test
 
-1. `Bronze_Ingestion`
-2. `Silver_Transformation`
-3. `Gold_Aggregation`
+A simulated batch of eight records was processed against isolated test targets.
 
-The pipeline and all three Databricks tasks have completed successfully during validation.
+| Test Metric                     | Result |
+| ------------------------------- | -----: |
+| Eligible records                |      8 |
+| Existing records updated        |      3 |
+| New records inserted            |      5 |
+| Final Silver test rows          | 99,060 |
+| Distinct order IDs              | 99,060 |
+| Duplicate target order IDs      |      0 |
+| Gold daily regional groups      |    153 |
+| Duplicate daily regional groups |      0 |
 
-The persisted Gold datasets have been read back successfully from ADLS Gen2.
+### Reconciliation Results
 
-| Gold dataset         | Validated row count |
-| -------------------- | ------------------: |
-| Regional Orders      |                   5 |
-| Daily Regional Sales |                 150 |
+| Metric           |           Silver |             Gold |
+| ---------------- | ---------------: | ---------------: |
+| Completed orders |           24,766 |           24,766 |
+| Completed units  |          111,517 |          111,517 |
+| Net sales        | 1,560,798,861.00 | 1,560,798,861.00 |
 
-## Repository Structure
+The same batch was processed again to test idempotency. The Silver test row count and distinct ID count remained unchanged, and the reconciled Gold metrics remained consistent.
 
-```text
-enterprise-retail-data-platform/
-|
-├── README.md
-|
-└── docs/
-    ├── 01-business-requirements/
-    ├── 02-architecture/
-    ├── 03-data-design/
-    ├── 04-ingestion/
-    ├── 05-transformation/
-    ├── 06-data-quality/
-    ├── 07-incremental-processing/
-    ├── 08-security-governance/
-    ├── 09-monitoring-operations/
-    ├── 10-performance/
-    ├── 11-testing/
-    ├── 12-deployment/
-    ├── 13-disaster-recovery/
-    └── 14-decisions/
-```
+The batch audit and control records reached `SUCCEEDED`. The test watermark advanced from `2026-10-01 23:22:00` to `2026-10-12 12:00:00`.
 
-The repository contains architecture documentation, business requirements, data design, implementation strategy, data-quality controls, operational guidance, deployment planning, and architecture decision records.
+**Important:** This is a controlled incremental-processing test using a simulated batch. It does not yet establish a production-ready source change feed, automated incremental orchestration, concurrent-run safety, or complete failure recovery.
 
-Finalized notebook source files and additional deployment artifacts will be published as they are reviewed and prepared for source control.
+## Implementation Status
 
-## Current Implementation Status
+### Completed and validated
 
-### Implemented
+* Bronze ingestion and Silver transformation.
+* Data quality validation and quarantine processing.
+* Baseline reconciliation of raw, Silver, and quarantine records.
+* Gold daily regional sales aggregation.
+* Gold business-metric reconciliation.
+* Azure Data Factory V1 full-load orchestration through an Azure Databricks Job.
+* Controlled incremental batch selection and Delta MERGE.
+* Incremental test control table and batch audit record.
+* Incremental idempotency and Gold reconciliation checks.
+* Architecture, design, governance, testing, and operations documentation.
 
-* Raw and Bronze ingestion.
-* Silver transformation and standardization.
-* Data-quality validation.
-* Quarantine processing.
-* Record-count reconciliation.
-* Regional Orders Gold dataset.
-* Daily Regional Sales Gold dataset.
-* Gold Delta persistence to ADLS Gen2.
-* Gold read-back validation.
-* Silver-to-Gold reconciliation.
-* Azure Data Factory full-load orchestration.
-* Databricks serverless job execution.
-* Sequential notebook task dependencies.
-* GitHub architecture and implementation documentation.
+### Planned enhancements
 
-### Planned Enhancements
-
-* Incremental ingestion and transformation.
-* Watermark and control-table management.
-* Idempotent incremental processing.
-* Automated CI/CD deployment.
-* Automated monitoring and failure notifications.
-* Advanced performance optimization.
-* Metadata-driven data-quality rules.
-* Centralized operational logging and alerting.
-* Production-grade recovery and disaster-recovery automation.
-* Additional analytics-ready Gold data products.
-
-Planned capabilities will be marked as implemented only after development and validation.
+* Production-grade incremental processing and source CDC integration.
+* Late-arriving and equal-timestamp record handling.
+* Reliable retry, recovery, and concurrent-run protection.
+* Incremental recomputation of affected Gold aggregates.
+* Automated incremental orchestration.
+* Automated monitoring, alerting, and failure notifications.
+* CI/CD and environment-specific deployment configuration.
+* Production-scale performance testing.
+* Disaster recovery validation and operational runbooks.
 
 ## Documentation
 
-Project documentation is maintained under the `docs/` directory.
+Detailed project documentation is organized under `docs/`:
 
-Key documents include:
+* `01-business-requirements/` — business requirements and scope.
+* `02-architecture/` — solution and data architecture.
+* `03-data-design/` — data dictionary.
+* `04-ingestion/` — ingestion design.
+* `05-transformation/` — transformation design.
+* `06-data-quality/` — data quality framework.
+* `07-incremental-processing/` — incremental processing design and current limitations.
+* `08-security-governance/` — security and governance.
+* `09-monitoring-operations/` — monitoring and operational procedures.
+* `10-performance/` — performance and optimization.
+* `11-testing/` — testing strategy and validation evidence.
+* `12-deployment/` — deployment and CI/CD.
+* `13-disaster-recovery/` — disaster recovery and business continuity.
+* `14-decisions/` — architecture decision records.
 
-* Business requirements.
-* Solution and data architecture.
-* Data dictionary.
-* Ingestion and transformation design.
-* Data-quality framework.
-* Incremental-processing design.
-* Security and governance.
-* Monitoring and operations.
-* Performance and optimization.
-* Testing and validation.
-* Deployment and CI/CD.
-* Disaster recovery and business continuity.
-* Architecture decision records.
+## Project Status
 
-## Project Goals
+The full-load Bronze–Silver–Gold pipeline and its V1 orchestration have been implemented and validated. Incremental processing has passed a controlled test covering MERGE behavior, idempotency, audit tracking, watermark advancement, and Gold reconciliation.
 
-The project is intended to demonstrate practical data engineering capabilities, including distributed transformations, layered data architecture, data-quality management, financial reconciliation, cloud storage integration, orchestration, and operational validation.
-
-The implementation will continue to evolve toward a more production-oriented platform through incremental processing, automated testing, deployment automation, monitoring, and recovery improvements.
-
----
-
-**Project status:** Full-load Bronze-to-Gold processing and ADF orchestration implemented and validated in the development environment. Advanced production capabilities remain in progress.
+The project is continuing toward production-grade incremental processing, automated operations, and deployment hardening.
